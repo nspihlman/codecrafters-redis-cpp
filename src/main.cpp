@@ -57,7 +57,7 @@ int main(int argc, char **argv) {
 
   char buffer[1024];
   read(client_fd, buffer, 1024);
-  send(client_fd, "PONG\r\n", 7, 0);
+  send(client_fd, "+PONG\r\n", 7, 0);
   
   close(server_fd);
 
