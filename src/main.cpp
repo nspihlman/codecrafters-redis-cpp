@@ -10,9 +10,11 @@
 #include <netdb.h>
 
 void respond_pong(int client_fd){
-  char buffer[14];
-  read(client_fd, buffer, 14);
-  send(client_fd, "+PONG\r\n", 7, 0);
+  while(true){
+    char buffer[14];
+    read(client_fd, buffer, 14);
+    send(client_fd, "+PONG\r\n", 7, 0);
+  }
 }
 
 int main(int argc, char **argv) {
@@ -58,7 +60,6 @@ int main(int argc, char **argv) {
   std::cout << "Logs from your program will appear here!\n";
 
   //Uncomment the code below to pass the first stage
-
 
   while(true){
     int client_fd = accept(server_fd, (struct sockaddr *) &client_addr, (socklen_t *) &client_addr_len);
