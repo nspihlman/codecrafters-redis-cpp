@@ -64,8 +64,8 @@ int main(int argc, char **argv) {
   while(true){
     int client_fd = accept(server_fd, (struct sockaddr *) &client_addr, (socklen_t *) &client_addr_len);
     std::cout << "Client connected\n";
-    std::thread new_client(respond_pong, client_fd);
-  }
+    std::thread(respond_pong, client_fd).detach();
+    }
   close(server_fd);
 
   return 0;
