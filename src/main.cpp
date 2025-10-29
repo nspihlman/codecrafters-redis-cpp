@@ -3,21 +3,68 @@
 #include <string>
 #include <cstring>
 #include <thread>
+#include <vector>
+#include <stack>
+#include <cmath>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netdb.h>
 
-void respond_pong(int client_fd){
-  char buffer[32];
+std::string parse_string(const char*& buffer){
+  //string_start is the index in the buffer that the $ is found
+  char* end;
+  long string_length = strtol(buffer+1, &end, 10);
+  const char* stringStart = end + 2;
+  buffer = stringStart + string_length + 2; // now buffer is pointing to the next $ if there is one, or a nullptr
+  return std::string(stringStart, string_length);
+}
+
+std::vector<std::string> parse_array(const char*& buffer, size_t length){
+  char* end;
+  std::vector<std::string> arrayValues;
+  long array_len = std::strtol(buffer+1, &end, 10);
+  std::cout << "array_len " + std::to_string(array_len) + "\n";
+  buffer = end + 2; // buffer now points to the first $
+  while(array_len > 0){
+    --array_len;
+    arrayValues.push_back(parse_string(buffer));
+  }
+  return arrayValues;
+}
+
+std::vector<std::string> parser(const char*& buffer, size_t length){
+  
+  if (buffer[0] == '*'){
+    return parse_array(buffer, length);
+  }
+  if (buffer[0] == '$'){
+    return {parse_string(buffer)};
+  }
+  return {""};
+}
+
+void process_client_message(int client_fd, const char* buffer, size_t length){
+    std::vector<std::string> commands = parser(buffer, length);
+    if(commands[0] == "PING"){
+      send(client_fd, "+PONG\r\n", 7, 0);
+    }
+    else if (commands[0] == "ECHO"){
+      std::string response = "+" + commands[1] + "\r\n";
+      send(client_fd, response.c_str(), response.length(), 0);
+    }
+}
+
+void talk_to_client(int client_fd){
+  char buffer[1024];
   while(true){
-    ssize_t bytes_read = read(client_fd, buffer, sizeof(buffer));
+    ssize_t bytes_read = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
     if(bytes_read <=0){
       close(client_fd);
       break;
     }
-    send(client_fd, "+PONG\r\n", 7, 0);
+    process_client_message(client_fd, buffer, bytes_read);
   }
 }
 
@@ -68,7 +115,8 @@ int main(int argc, char **argv) {
   while(true){
     int client_fd = accept(server_fd, (struct sockaddr *) &client_addr, (socklen_t *) &client_addr_len);
     std::cout << "Client connected\n";
-    std::thread(respond_pong, client_fd).detach();
+    talk_to_client(client_fd);
+    //std::thread(talk_to_client, client_fd).detach();
     }
   close(server_fd);
 
