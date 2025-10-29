@@ -2,11 +2,18 @@
 #include <cstdlib>
 #include <string>
 #include <cstring>
+#include <thread>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+
+void respond_pong(int client_fd){
+  char buffer[14];
+  read(client_fd, buffer, 14);
+  send(client_fd, "+PONG\r\n", 7, 0);
+}
 
 int main(int argc, char **argv) {
   // Flush after every std::cout / std::cerr
@@ -51,14 +58,12 @@ int main(int argc, char **argv) {
   std::cout << "Logs from your program will appear here!\n";
 
   //Uncomment the code below to pass the first stage
-  
-  int client_fd = accept(server_fd, (struct sockaddr *) &client_addr, (socklen_t *) &client_addr_len);
-  std::cout << "Client connected\n";
+
 
   while(true){
-    char buffer[14];
-    read(client_fd, buffer, 14);
-    send(client_fd, "+PONG\r\n", 7, 0);
+    int client_fd = accept(server_fd, (struct sockaddr *) &client_addr, (socklen_t *) &client_addr_len);
+    std::cout << "Client connected\n";
+    std::thread new_client(respond_pong, client_fd);
   }
   close(server_fd);
 
