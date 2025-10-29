@@ -10,9 +10,13 @@
 #include <netdb.h>
 
 void respond_pong(int client_fd){
+  char buffer[32];
   while(true){
-    char buffer[14];
-    read(client_fd, buffer, 14);
+    ssize_t bytes_read = read(client_fd, buffer, sizeof(buffer));
+    if(bytes_read <=0){
+      close(client_fd);
+      break;
+    }
     send(client_fd, "+PONG\r\n", 7, 0);
   }
 }
