@@ -8,10 +8,29 @@
 #include <stack>
 #include <cmath>
 #include <unistd.h>
+#include <chrono>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+
+class UserSetValue{
+public:
+  std::string value;
+  int64_t msExpiry = -1; // expiry time in milliseconds. -1 denotes a UserSetValue with no expiry defined
+  std::chrono::steady_clock::time_point inserted = std::chrono::steady_clock::now();
+
+  UserSetValue() : value("") {}
+  UserSetValue(std::string value) : value(value) {}
+  UserSetValue(std::string value, int64_t msExpiry) : value(value), msExpiry(msExpiry) {}
+
+  bool stillValid(){
+    if(msExpiry == -1){
+      return true;
+    }
+    return (std::chrono::steady_clock::now() - inserted) < std::chrono::milliseconds(msExpiry);
+  }
+};
 
 std::string parse_string(const char*& buffer){
   //string_start is the index in the buffer that the $ is found
@@ -26,7 +45,6 @@ std::vector<std::string> parse_array(const char*& buffer, size_t length){
   char* end;
   std::vector<std::string> arrayValues;
   long array_len = std::strtol(buffer+1, &end, 10);
-  std::cout << "array_len " + std::to_string(array_len) + "\n";
   buffer = end + 2; // buffer now points to the first $
   while(array_len > 0){
     --array_len;
@@ -36,7 +54,6 @@ std::vector<std::string> parse_array(const char*& buffer, size_t length){
 }
 
 std::vector<std::string> parser(const char*& buffer, size_t length){
-  
   if (buffer[0] == '*'){
     return parse_array(buffer, length);
   }
@@ -46,20 +63,33 @@ std::vector<std::string> parser(const char*& buffer, size_t length){
   return {""};
 }
 
-void process_set_message(int client_fd, std::vector<std::string>& commands, std::unordered_map<std::string, std::string>& user_set_values){
-  user_set_values[commands[1]] = commands[2];
+void process_set_message(int client_fd, std::vector<std::string>& commands, std::unordered_map<std::string, UserSetValue>& user_set_values){
+  UserSetValue newValue = UserSetValue(commands[2]);
+  if(commands.size() == 5 && commands[3] == "PX"){
+    newValue.msExpiry = stoll(commands[4], NULL, 10);
+  }
+  else if (commands.size() == 5 && commands[3] == "EX"){
+    newValue.msExpiry = stoll(commands[4], NULL, 10) * 1000;
+  }
+  user_set_values[commands[1]] = newValue;
   send(client_fd, "+OK\r\n", 5, 0);
 }
 
-void process_get_message(int client_fd, std::vector<std::string>& commands, std::unordered_map<std::string, std::string>& user_set_values){
+void process_get_message(int client_fd, std::vector<std::string>& commands, std::unordered_map<std::string, UserSetValue>& user_set_values){
   if(user_set_values.find(commands[1]) == user_set_values.end()){
     send(client_fd, "$-1\r\n", 5, 0);
+    return;
   }
-  std::string response = "$" + std::to_string(user_set_values[commands[1]].length()) + "\r\n" + user_set_values[commands[1]] + "\r\n";
+  if(!user_set_values[commands[1]].stillValid()){
+    user_set_values.erase(commands[1]);
+    send(client_fd, "$-1\r\n", 5, 0);
+    return;
+  }
+  std::string response = "$" + std::to_string(user_set_values[commands[1]].value.length()) + "\r\n" + user_set_values[commands[1]].value + "\r\n";
   send(client_fd, response.c_str(), response.length(), 0);
 }
 
-void process_client_message(int client_fd, const char* buffer, size_t length, std::unordered_map<std::string, std::string>& user_set_values){
+void process_client_message(int client_fd, const char* buffer, size_t length, std::unordered_map<std::string, UserSetValue>& user_set_values){
     std::vector<std::string> commands = parser(buffer, length);
     if(commands[0] == "PING"){
       send(client_fd, "+PONG\r\n", 7, 0);
@@ -78,7 +108,7 @@ void process_client_message(int client_fd, const char* buffer, size_t length, st
 
 void talk_to_client(int client_fd){
   char buffer[1024];
-  std::unordered_map<std::string, std::string> user_set_values;
+  std::unordered_map<std::string, UserSetValue> user_set_values;
   while(true){
     ssize_t bytes_read = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
     if(bytes_read <=0){
