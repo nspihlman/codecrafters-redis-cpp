@@ -4,6 +4,7 @@
 #include <cstring>
 #include <thread>
 #include <vector>
+#include <unordered_map>
 #include <stack>
 #include <cmath>
 #include <unistd.h>
@@ -45,7 +46,20 @@ std::vector<std::string> parser(const char*& buffer, size_t length){
   return {""};
 }
 
-void process_client_message(int client_fd, const char* buffer, size_t length){
+void process_set_message(int client_fd, std::vector<std::string>& commands, std::unordered_map<std::string, std::string>& user_set_values){
+  user_set_values[commands[1]] = commands[2];
+  send(client_fd, "+OK\r\n", 5, 0);
+}
+
+void process_get_message(int client_fd, std::vector<std::string>& commands, std::unordered_map<std::string, std::string>& user_set_values){
+  if(user_set_values.find(commands[1]) == user_set_values.end()){
+    send(client_fd, "$-1\r\n", 5, 0);
+  }
+  std::string response = "$" + std::to_string(user_set_values[commands[1]].length()) + "\r\n" + user_set_values[commands[1]] + "\r\n";
+  send(client_fd, response.c_str(), response.length(), 0);
+}
+
+void process_client_message(int client_fd, const char* buffer, size_t length, std::unordered_map<std::string, std::string>& user_set_values){
     std::vector<std::string> commands = parser(buffer, length);
     if(commands[0] == "PING"){
       send(client_fd, "+PONG\r\n", 7, 0);
@@ -54,17 +68,24 @@ void process_client_message(int client_fd, const char* buffer, size_t length){
       std::string response = "+" + commands[1] + "\r\n";
       send(client_fd, response.c_str(), response.length(), 0);
     }
+    else if (commands[0] == "SET"){
+      process_set_message(client_fd, commands, user_set_values);
+    }
+    else if (commands[0] == "GET"){
+      process_get_message(client_fd, commands, user_set_values);
+    }
 }
 
 void talk_to_client(int client_fd){
   char buffer[1024];
+  std::unordered_map<std::string, std::string> user_set_values;
   while(true){
     ssize_t bytes_read = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
     if(bytes_read <=0){
       close(client_fd);
       break;
     }
-    process_client_message(client_fd, buffer, bytes_read);
+    process_client_message(client_fd, buffer, bytes_read, user_set_values);
   }
 }
 
