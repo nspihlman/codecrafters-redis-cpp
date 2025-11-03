@@ -12,7 +12,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netdb.h>
-#include "user_set_value.h"
+#include "user_data.h"
 #include "parser.h"
 
 
@@ -42,11 +42,17 @@ void process_get_message(int client_fd, std::vector<std::string>& commands, std:
   send(client_fd, response.c_str(), response.length(), 0);
 }
 
-void process_rpush_message(int client_fd, std::vector<std::string>& commands){
+void process_rpush_message(int client_fd, std::vector<std::string>& commands, UserData& user_data){
+  if(user_data.user_lists.find(commands[1]) == user_data.user_lists.end()){
+    user_data.user_lists[commands[1]] = {};
+  }
+  user_data.user_lists[commands[1]].push_back(commands[2]);
+  std::string list_length = ":" + std::to_string(user_data.user_lists[commands[1]].size()) + "\r\n";
+  send(client_fd, list_length.c_str(), list_length.size(), 0);
   return;
 }
 
-void process_client_message(int client_fd, const char* buffer, size_t length, std::unordered_map<std::string, UserSetValue>& user_set_values){
+void process_client_message(int client_fd, const char* buffer, size_t length, UserData& user_data){
     std::vector<std::string> commands = parser(buffer, length);
     if(commands[0] == "PING"){
       send(client_fd, "+PONG\r\n", 7, 0);
@@ -56,26 +62,26 @@ void process_client_message(int client_fd, const char* buffer, size_t length, st
       send(client_fd, response.c_str(), response.length(), 0);
     }
     else if (commands[0] == "SET"){
-      process_set_message(client_fd, commands, user_set_values);
+      process_set_message(client_fd, commands, user_data.user_set_values);
     }
     else if (commands[0] == "GET"){
-      process_get_message(client_fd, commands, user_set_values);
+      process_get_message(client_fd, commands, user_data.user_set_values);
     }
     else if (commands[0] == "RPUSH"){
-      process_rpush_message(client_fd, commands);
+      process_rpush_message(client_fd, commands, user_data);
     }
 }
 
 void talk_to_client(int client_fd){
   char buffer[1024];
-  std::unordered_map<std::string, UserSetValue> user_set_values;
+  UserData user_data;
   while(true){
     ssize_t bytes_read = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
     if(bytes_read <=0){
       close(client_fd);
       break;
     }
-    process_client_message(client_fd, buffer, bytes_read, user_set_values);
+    process_client_message(client_fd, buffer, bytes_read, user_data);
   }
 }
 

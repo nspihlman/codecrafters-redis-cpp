@@ -1,5 +1,6 @@
 #include <string>
 #include <chrono>
+#include <unordered_map>
 
 
 class UserSetValue{
@@ -13,4 +14,11 @@ public:
   UserSetValue(std::string value, int64_t msExpiry);
 
   bool stillValid();
+};
+
+
+class UserData{
+public:
+  std::unordered_map<std::string, UserSetValue> user_set_values;
+  std::unordered_map<std::string, std::vector<std::string>> user_lists;
 };
