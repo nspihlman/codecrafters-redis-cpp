@@ -46,10 +46,8 @@ void process_rpush_message(int client_fd, std::vector<std::string>& commands, Us
   if(user_data.user_lists.find(commands[1]) == user_data.user_lists.end()){
     user_data.user_lists[commands[1]] = {};
   }
-  else {
-    for(int i = 2; i < commands.size(); ++i){
-      user_data.user_lists[commands[1]].push_back(commands[i]);
-    }
+  for(int i = 2; i < commands.size(); ++i){
+    user_data.user_lists[commands[1]].push_back(commands[i]);
   }
   std::string list_length = ":" + std::to_string(user_data.user_lists[commands[1]].size()) + "\r\n";
   send(client_fd, list_length.c_str(), list_length.size(), 0);
