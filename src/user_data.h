@@ -1,6 +1,7 @@
 #include <string>
 #include <chrono>
 #include <unordered_map>
+#include <deque>
 
 
 class UserSetValue{
@@ -20,5 +21,5 @@ public:
 class UserData{
 public:
   std::unordered_map<std::string, UserSetValue> user_set_values;
-  std::unordered_map<std::string, std::vector<std::string>> user_lists;
+  std::unordered_map<std::string, std::deque<std::string>> user_lists;
 };

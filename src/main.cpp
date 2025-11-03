@@ -88,6 +88,18 @@ void process_lrange_message(int client_fd, std::vector<std::string>& commands, U
   send(client_fd, response.c_str(), response.size(), 0);
 }
 
+void process_lpush_message(int client_fd, std::vector<std::string>& commands, UserData& user_data){
+  if(user_data.user_lists.find(commands[1]) == user_data.user_lists.end()){
+    user_data.user_lists[commands[1]] = {};
+  }
+  for(int i = 2; i < commands.size(); ++i){
+    user_data.user_lists[commands[1]].push_front(commands[i]);
+  }
+  std::string list_length = ":" + std::to_string(user_data.user_lists[commands[1]].size()) + "\r\n";
+  send(client_fd, list_length.c_str(), list_length.size(), 0);
+  return;
+}
+
 void process_client_message(int client_fd, const char* buffer, size_t length, UserData& user_data){
     std::vector<std::string> commands = parser(buffer, length);
     if(commands[0] == "PING"){
@@ -108,6 +120,9 @@ void process_client_message(int client_fd, const char* buffer, size_t length, Us
     }
     else if (commands[0] == "LRANGE"){
       process_lrange_message(client_fd, commands, user_data);
+    }
+    else if (commands[0] == "LPUSH"){
+      process_lpush_message(client_fd, commands, user_data);
     }
 }
 
