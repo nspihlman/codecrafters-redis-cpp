@@ -43,6 +43,12 @@ void process_get_message(int client_fd, std::vector<std::string>& commands, std:
   send(client_fd, response.c_str(), response.length(), 0);
 }
 
+void send_user_list_length(int client_fd, std::string list_name, UserData& user_data){
+  std::string list_length= ":" + std::to_string(user_data.user_lists[list_name].size()) + "\r\n";
+  send(client_fd, list_length.c_str(), list_length.size(), 0);
+  return;
+}
+
 void process_rpush_message(int client_fd, std::vector<std::string>& commands, UserData& user_data){
   if(user_data.user_lists.find(commands[1]) == user_data.user_lists.end()){
     user_data.user_lists[commands[1]] = {};
@@ -50,9 +56,7 @@ void process_rpush_message(int client_fd, std::vector<std::string>& commands, Us
   for(int i = 2; i < commands.size(); ++i){
     user_data.user_lists[commands[1]].push_back(commands[i]);
   }
-  std::string list_length = ":" + std::to_string(user_data.user_lists[commands[1]].size()) + "\r\n";
-  send(client_fd, list_length.c_str(), list_length.size(), 0);
-  return;
+  send_user_list_length(client_fd, commands[1], user_data);
 }
 
 int_fast64_t convert_indexes(int index, size_t list_length){
@@ -95,9 +99,7 @@ void process_lpush_message(int client_fd, std::vector<std::string>& commands, Us
   for(int i = 2; i < commands.size(); ++i){
     user_data.user_lists[commands[1]].push_front(commands[i]);
   }
-  std::string list_length = ":" + std::to_string(user_data.user_lists[commands[1]].size()) + "\r\n";
-  send(client_fd, list_length.c_str(), list_length.size(), 0);
-  return;
+  send_user_list_length(client_fd, commands[1], user_data);
 }
 
 void process_client_message(int client_fd, const char* buffer, size_t length, UserData& user_data){
@@ -123,6 +125,9 @@ void process_client_message(int client_fd, const char* buffer, size_t length, Us
     }
     else if (commands[0] == "LPUSH"){
       process_lpush_message(client_fd, commands, user_data);
+    }
+    else if(commands[0] == "LLEN") {
+      send_user_list_length(client_fd, commands[1], user_data);
     }
 }
 
