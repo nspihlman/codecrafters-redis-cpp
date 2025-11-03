@@ -55,13 +55,25 @@ void process_rpush_message(int client_fd, std::vector<std::string>& commands, Us
   return;
 }
 
+int_fast64_t convert_indexes(int index, size_t list_length){
+  if(index >= 0) {
+    return index;
+  }
+  int positive_index = list_length + index;
+  if(positive_index < 0){
+    return 0;
+  }
+  return positive_index;
+}
+
 void process_lrange_message(int client_fd, std::vector<std::string>& commands, UserData& user_data){
-  int start = stoll(commands[2]);
-  int stop = stoll(commands[3]);
-  std::cout << start;
-  std::cout << stop;
+  if(user_data.user_lists.find(commands[1]) == user_data.user_lists.end()){
+    send(client_fd, "*0\r\n", 4, 0);
+    return;
+  }
+  int start = convert_indexes(stoll(commands[2]), user_data.user_lists[commands[1]].size());
+  int stop = convert_indexes(stoll(commands[3]), user_data.user_lists[commands[1]].size());
   if(user_data.user_lists.find(commands[1]) == user_data.user_lists.end() || start >= user_data.user_lists[commands[1]].size() || start > stop){
-    std::cout << "entered incorrectly\n";
     send(client_fd, "*0\r\n", 4, 0);
     return;
   }
