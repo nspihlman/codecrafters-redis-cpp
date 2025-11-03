@@ -58,16 +58,19 @@ void process_rpush_message(int client_fd, std::vector<std::string>& commands, Us
 void process_lrange_message(int client_fd, std::vector<std::string>& commands, UserData& user_data){
   int start = stoll(commands[2]);
   int stop = stoll(commands[3]);
-  if(user_data.user_lists.find(commands[1]) == user_data.user_lists.end() || start > user_data.user_lists[commands[1]].size() || start > stop){
+  std::cout << start;
+  std::cout << stop;
+  if(user_data.user_lists.find(commands[1]) == user_data.user_lists.end() || start >= user_data.user_lists[commands[1]].size() || start > stop){
+    std::cout << "entered incorrectly\n";
     send(client_fd, "*0\r\n", 4, 0);
     return;
   }
   if(stop >= user_data.user_lists[commands[1]].size()){
     stop = user_data.user_lists[commands[1]].size() - 1;
   }
-  std::string response = "*" + std::to_string(start - stop + 1) + "\r\n";
+  std::string response = "*" + std::to_string(stop - start + 1) + "\r\n";
   for(start; start <= stop; ++start){
-    response += "$" + std::to_string(user_data.user_lists[commands[1]].size()) + "\r\n";
+    response += "$" + std::to_string(user_data.user_lists[commands[1]][start].size()) + "\r\n";
     response += user_data.user_lists[commands[1]][start] + "\r\n";
   }
   send(client_fd, response.c_str(), response.size(), 0);
