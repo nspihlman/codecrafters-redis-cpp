@@ -8,29 +8,12 @@
 #include <stack>
 #include <cmath>
 #include <unistd.h>
-#include <chrono>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <user_set_value.h>
 
-class UserSetValue{
-public:
-  std::string value;
-  int64_t msExpiry = -1; // expiry time in milliseconds. -1 denotes a UserSetValue with no expiry defined
-  std::chrono::steady_clock::time_point inserted = std::chrono::steady_clock::now();
-
-  UserSetValue() : value("") {}
-  UserSetValue(std::string value) : value(value) {}
-  UserSetValue(std::string value, int64_t msExpiry) : value(value), msExpiry(msExpiry) {}
-
-  bool stillValid(){
-    if(msExpiry == -1){
-      return true;
-    }
-    return (std::chrono::steady_clock::now() - inserted) < std::chrono::milliseconds(msExpiry);
-  }
-};
 
 std::string parse_string(const char*& buffer){
   //string_start is the index in the buffer that the $ is found
@@ -89,6 +72,10 @@ void process_get_message(int client_fd, std::vector<std::string>& commands, std:
   send(client_fd, response.c_str(), response.length(), 0);
 }
 
+void process_rpush_message(int client_fd, std::vector<std::string>& commands){
+  return;
+}
+
 void process_client_message(int client_fd, const char* buffer, size_t length, std::unordered_map<std::string, UserSetValue>& user_set_values){
     std::vector<std::string> commands = parser(buffer, length);
     if(commands[0] == "PING"){
@@ -103,6 +90,9 @@ void process_client_message(int client_fd, const char* buffer, size_t length, st
     }
     else if (commands[0] == "GET"){
       process_get_message(client_fd, commands, user_set_values);
+    }
+    else if (commands[0] == "RPUSH"){
+      process_rpush_message(client_fd, commands);
     }
 }
 
@@ -157,11 +147,6 @@ int main(int argc, char **argv) {
   struct sockaddr_in client_addr;
   int client_addr_len = sizeof(client_addr);
   std::cout << "Waiting for a client to connect...\n";
-
-  // You can use print statements as follows for debugging, they'll be visible when running tests.
-  std::cout << "Logs from your program will appear here!\n";
-
-  //Uncomment the code below to pass the first stage
 
   while(true){
     int client_fd = accept(server_fd, (struct sockaddr *) &client_addr, (socklen_t *) &client_addr_len);
