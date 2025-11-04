@@ -22,14 +22,32 @@ void send_user_list_length(int client_fd, std::string list_name, UserData& user_
   return;
 }
 
-void send_bulk_string(int client_fd, std::string str){
+std::string make_bulk_string(const std::string& str){
   if(str.size() == 0){
-    send(client_fd, "$-1\r\n", 5, 0);
-    return;
+    return "$-1\r\n";
   }
   std::string response = "$" + std::to_string(str.size()) + "\r\n" + str + "\r\n";
+  return response;
+}
+
+void send_bulk_string(int client_fd, const std::string& str){
+  std::string response = make_bulk_string(str);
   send(client_fd, response.c_str(), response.size(), 0);
 }
+
+std::string make_resp_array(const std::vector<std::string>& strs){
+  std::string value = "*" + std::to_string(strs.size()) + "\r\n";
+  for(int i = 0; i < strs.size(); ++i){
+    value += make_bulk_string(strs[i]);
+  }
+  return value;
+}
+
+void send_resp_array(int client_fd, const std::vector<std::string>& strs){
+  std::string resp_array = make_resp_array(strs);
+  send(client_fd, resp_array.c_str(), resp_array.size(), 0);
+}
+
 
 void process_set_message(int client_fd, std::vector<std::string>& commands, std::unordered_map<std::string, UserSetValue>& user_set_values){
   UserSetValue newValue = UserSetValue(commands[2]);
@@ -45,16 +63,15 @@ void process_set_message(int client_fd, std::vector<std::string>& commands, std:
 
 void process_get_message(int client_fd, std::vector<std::string>& commands, std::unordered_map<std::string, UserSetValue>& user_set_values){
   if(user_set_values.find(commands[1]) == user_set_values.end()){
-    send(client_fd, "$-1\r\n", 5, 0);
+    send_bulk_string(client_fd, "");
     return;
   }
   if(!user_set_values[commands[1]].stillValid()){
     user_set_values.erase(commands[1]);
-    send(client_fd, "$-1\r\n", 5, 0);
+    send_bulk_string(client_fd, "");
     return;
   }
-  std::string response = "$" + std::to_string(user_set_values[commands[1]].value.length()) + "\r\n" + user_set_values[commands[1]].value + "\r\n";
-  send(client_fd, response.c_str(), response.length(), 0);
+  send_bulk_string(client_fd, user_set_values[commands[1]].value);
 }
 
 void process_rpush_message(int client_fd, std::vector<std::string>& commands, UserData& user_data){
@@ -80,24 +97,23 @@ int_fast64_t convert_indexes(int index, size_t list_length){
 
 void process_lrange_message(int client_fd, std::vector<std::string>& commands, UserData& user_data){
   if(user_data.user_lists.find(commands[1]) == user_data.user_lists.end()){
-    send(client_fd, "*0\r\n", 4, 0);
+    send_resp_array(client_fd, {});
     return;
   }
   int start = convert_indexes(stoll(commands[2]), user_data.user_lists[commands[1]].size());
   int stop = convert_indexes(stoll(commands[3]), user_data.user_lists[commands[1]].size());
   if(user_data.user_lists.find(commands[1]) == user_data.user_lists.end() || start >= user_data.user_lists[commands[1]].size() || start > stop){
-    send(client_fd, "*0\r\n", 4, 0);
+    send_resp_array(client_fd, {});
     return;
   }
   if(stop >= user_data.user_lists[commands[1]].size()){
     stop = user_data.user_lists[commands[1]].size() - 1;
   }
-  std::string response = "*" + std::to_string(stop - start + 1) + "\r\n";
+  std::vector<std::string> strs;
   for(start; start <= stop; ++start){
-    response += "$" + std::to_string(user_data.user_lists[commands[1]][start].size()) + "\r\n";
-    response += user_data.user_lists[commands[1]][start] + "\r\n";
+    strs.push_back(user_data.user_lists[commands[1]][start]);
   }
-  send(client_fd, response.c_str(), response.size(), 0);
+  send_resp_array(client_fd, strs);
 }
 
 void process_lpush_message(int client_fd, std::vector<std::string>& commands, UserData& user_data){
@@ -113,6 +129,16 @@ void process_lpush_message(int client_fd, std::vector<std::string>& commands, Us
 void process_lpop_message(int client_fd, std::vector<std::string>& commands, UserData& user_data){
   if(user_data.user_lists.find(commands[1]) == user_data.user_lists.end() || user_data.user_lists[commands[1]].size() == 0){
     send_bulk_string(client_fd, "");
+    return;
+  }
+  if(commands.size() > 2){
+    std::vector<std::string> strs;
+    int ele_to_pop = stoll(commands[2]);
+    for(int i = 0; i <  ele_to_pop; ++i){
+      strs.push_back(user_data.user_lists[commands[1]].front());
+      user_data.user_lists[commands[1]].pop_front();
+    }
+    send_resp_array(client_fd, strs);
     return;
   }
   send_bulk_string(client_fd, user_data.user_lists[commands[1]].front());
