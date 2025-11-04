@@ -16,6 +16,20 @@
 #include "user_data.h"
 #include "parser.h"
 
+void send_user_list_length(int client_fd, std::string list_name, UserData& user_data){
+  std::string list_length= ":" + std::to_string(user_data.user_lists[list_name].size()) + "\r\n";
+  send(client_fd, list_length.c_str(), list_length.size(), 0);
+  return;
+}
+
+void send_bulk_string(int client_fd, std::string str){
+  if(str.size() == 0){
+    send(client_fd, "$-1\r\n", 5, 0);
+    return;
+  }
+  std::string response = "$" + std::to_string(str.size()) + "\r\n" + str + "\r\n";
+  send(client_fd, response.c_str(), response.size(), 0);
+}
 
 void process_set_message(int client_fd, std::vector<std::string>& commands, std::unordered_map<std::string, UserSetValue>& user_set_values){
   UserSetValue newValue = UserSetValue(commands[2]);
@@ -41,12 +55,6 @@ void process_get_message(int client_fd, std::vector<std::string>& commands, std:
   }
   std::string response = "$" + std::to_string(user_set_values[commands[1]].value.length()) + "\r\n" + user_set_values[commands[1]].value + "\r\n";
   send(client_fd, response.c_str(), response.length(), 0);
-}
-
-void send_user_list_length(int client_fd, std::string list_name, UserData& user_data){
-  std::string list_length= ":" + std::to_string(user_data.user_lists[list_name].size()) + "\r\n";
-  send(client_fd, list_length.c_str(), list_length.size(), 0);
-  return;
 }
 
 void process_rpush_message(int client_fd, std::vector<std::string>& commands, UserData& user_data){
@@ -100,6 +108,15 @@ void process_lpush_message(int client_fd, std::vector<std::string>& commands, Us
     user_data.user_lists[commands[1]].push_front(commands[i]);
   }
   send_user_list_length(client_fd, commands[1], user_data);
+}
+
+void process_lpop_message(int client_fd, std::vector<std::string>& commands, UserData& user_data){
+  if(user_data.user_lists.find(commands[1]) == user_data.user_lists.end() || user_data.user_lists[commands[1]].size() == 0){
+    send_bulk_string(client_fd, "");
+    return;
+  }
+  send_bulk_string(client_fd, user_data.user_lists[commands[1]].front());
+  user_data.user_lists[commands[1]].pop_front();
 }
 
 void process_client_message(int client_fd, const char* buffer, size_t length, UserData& user_data){
