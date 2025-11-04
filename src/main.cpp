@@ -146,6 +146,9 @@ void process_client_message(int client_fd, const char* buffer, size_t length, Us
     else if(commands[0] == "LLEN") {
       send_user_list_length(client_fd, commands[1], user_data);
     }
+    else if(commands[0] == "LPOP"){
+      process_lpop_message(client_fd, commands, user_data);
+    }
 }
 
 void talk_to_client(int client_fd){
