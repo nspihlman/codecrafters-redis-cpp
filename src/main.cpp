@@ -15,38 +15,8 @@
 #include <netdb.h>
 #include "user_data.h"
 #include "parser.h"
+#include "respserializer.h"
 
-void send_user_list_length(int client_fd, std::string list_name, UserData& user_data){
-  std::string list_length= ":" + std::to_string(user_data.user_lists[list_name].size()) + "\r\n";
-  send(client_fd, list_length.c_str(), list_length.size(), 0);
-  return;
-}
-
-std::string make_bulk_string(const std::string& str){
-  if(str.size() == 0){
-    return "$-1\r\n";
-  }
-  std::string response = "$" + std::to_string(str.size()) + "\r\n" + str + "\r\n";
-  return response;
-}
-
-void send_bulk_string(int client_fd, const std::string& str){
-  std::string response = make_bulk_string(str);
-  send(client_fd, response.c_str(), response.size(), 0);
-}
-
-std::string make_resp_array(const std::vector<std::string>& strs){
-  std::string value = "*" + std::to_string(strs.size()) + "\r\n";
-  for(int i = 0; i < strs.size(); ++i){
-    value += make_bulk_string(strs[i]);
-  }
-  return value;
-}
-
-void send_resp_array(int client_fd, const std::vector<std::string>& strs){
-  std::string resp_array = make_resp_array(strs);
-  send(client_fd, resp_array.c_str(), resp_array.size(), 0);
-}
 
 
 void process_set_message(int client_fd, std::vector<std::string>& commands, std::unordered_map<std::string, UserSetValue>& user_set_values){
@@ -58,20 +28,20 @@ void process_set_message(int client_fd, std::vector<std::string>& commands, std:
     newValue.msExpiry = stoll(commands[4], NULL, 10) * 1000;
   }
   user_set_values[commands[1]] = newValue;
-  send(client_fd, "+OK\r\n", 5, 0);
+  RespSerializer::sendRespMessage(client_fd, "+OK\r\n");
 }
 
 void process_get_message(int client_fd, std::vector<std::string>& commands, std::unordered_map<std::string, UserSetValue>& user_set_values){
   if(user_set_values.find(commands[1]) == user_set_values.end()){
-    send_bulk_string(client_fd, "");
+    RespSerializer::sendRespMessage(client_fd, RespSerializer::bulkString(""));
     return;
   }
   if(!user_set_values[commands[1]].stillValid()){
     user_set_values.erase(commands[1]);
-    send_bulk_string(client_fd, "");
+    RespSerializer::sendRespMessage(client_fd, RespSerializer::bulkString(""));
     return;
   }
-  send_bulk_string(client_fd, user_set_values[commands[1]].value);
+  RespSerializer::sendRespMessage(client_fd, RespSerializer::bulkString(user_set_values[commands[1]].value));
 }
 
 void process_rpush_message(int client_fd, std::vector<std::string>& commands, UserData& user_data){
@@ -81,7 +51,7 @@ void process_rpush_message(int client_fd, std::vector<std::string>& commands, Us
   for(int i = 2; i < commands.size(); ++i){
     user_data.user_lists[commands[1]].push_back(commands[i]);
   }
-  send_user_list_length(client_fd, commands[1], user_data);
+  RespSerializer::sendRespMessage(client_fd, RespSerializer::integer(user_data.user_lists[commands[1]].size()));
 }
 
 int_fast64_t convert_indexes(int index, size_t list_length){
@@ -97,13 +67,15 @@ int_fast64_t convert_indexes(int index, size_t list_length){
 
 void process_lrange_message(int client_fd, std::vector<std::string>& commands, UserData& user_data){
   if(user_data.user_lists.find(commands[1]) == user_data.user_lists.end()){
-    send_resp_array(client_fd, {});
+    RespSerializer::sendRespMessage(client_fd, RespSerializer::array({}));
     return;
   }
+
   int start = convert_indexes(stoll(commands[2]), user_data.user_lists[commands[1]].size());
   int stop = convert_indexes(stoll(commands[3]), user_data.user_lists[commands[1]].size());
+  
   if(user_data.user_lists.find(commands[1]) == user_data.user_lists.end() || start >= user_data.user_lists[commands[1]].size() || start > stop){
-    send_resp_array(client_fd, {});
+    RespSerializer::sendRespMessage(client_fd, RespSerializer::array({}));
     return;
   }
   if(stop >= user_data.user_lists[commands[1]].size()){
@@ -113,7 +85,7 @@ void process_lrange_message(int client_fd, std::vector<std::string>& commands, U
   for(start; start <= stop; ++start){
     strs.push_back(user_data.user_lists[commands[1]][start]);
   }
-  send_resp_array(client_fd, strs);
+  RespSerializer::sendRespMessage(client_fd, RespSerializer::array(strs));
 }
 
 void process_lpush_message(int client_fd, std::vector<std::string>& commands, UserData& user_data){
@@ -123,12 +95,12 @@ void process_lpush_message(int client_fd, std::vector<std::string>& commands, Us
   for(int i = 2; i < commands.size(); ++i){
     user_data.user_lists[commands[1]].push_front(commands[i]);
   }
-  send_user_list_length(client_fd, commands[1], user_data);
+  RespSerializer::sendRespMessage(client_fd, RespSerializer::integer(user_data.user_lists[commands[1]].size()));
 }
 
 void process_lpop_message(int client_fd, std::vector<std::string>& commands, UserData& user_data){
   if(user_data.user_lists.find(commands[1]) == user_data.user_lists.end() || user_data.user_lists[commands[1]].size() == 0){
-    send_bulk_string(client_fd, "");
+    RespSerializer::sendRespMessage(client_fd, RespSerializer::bulkString(""));
     return;
   }
   if(commands.size() > 2){
@@ -138,21 +110,24 @@ void process_lpop_message(int client_fd, std::vector<std::string>& commands, Use
       strs.push_back(user_data.user_lists[commands[1]].front());
       user_data.user_lists[commands[1]].pop_front();
     }
-    send_resp_array(client_fd, strs);
+    RespSerializer::sendRespMessage(client_fd, RespSerializer::array(strs));
     return;
   }
-  send_bulk_string(client_fd, user_data.user_lists[commands[1]].front());
+  RespSerializer::sendRespMessage(client_fd, RespSerializer::bulkString(user_data.user_lists[commands[1]].front()));
   user_data.user_lists[commands[1]].pop_front();
+}
+
+void process_blpop_message(int client_fd, std::vector<std::string>& commands, UserData& user_data){
+  return;
 }
 
 void process_client_message(int client_fd, const char* buffer, size_t length, UserData& user_data){
     std::vector<std::string> commands = parser(buffer, length);
     if(commands[0] == "PING"){
-      send(client_fd, "+PONG\r\n", 7, 0);
+      RespSerializer::sendRespMessage(client_fd, "+PONG\r\n");
     }
     else if (commands[0] == "ECHO"){
-      std::string response = "+" + commands[1] + "\r\n";
-      send(client_fd, response.c_str(), response.length(), 0);
+      RespSerializer::sendRespMessage(client_fd, "+" + commands[1] + "\r\n");
     }
     else if (commands[0] == "SET"){
       process_set_message(client_fd, commands, user_data.user_set_values);
@@ -170,16 +145,18 @@ void process_client_message(int client_fd, const char* buffer, size_t length, Us
       process_lpush_message(client_fd, commands, user_data);
     }
     else if(commands[0] == "LLEN") {
-      send_user_list_length(client_fd, commands[1], user_data);
+      RespSerializer::sendRespMessage(client_fd, RespSerializer::integer(user_data.user_lists[commands[1]].size()));
     }
     else if(commands[0] == "LPOP"){
       process_lpop_message(client_fd, commands, user_data);
     }
+    else if(commands[0] == "BLPOP"){
+      process_blpop_message(client_fd, commands, user_data);
+    }
 }
 
-void talk_to_client(int client_fd){
+void talk_to_client(int client_fd, UserData& user_data){
   char buffer[1024];
-  UserData user_data;
   while(true){
     ssize_t bytes_read = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
     if(bytes_read <=0){
@@ -229,10 +206,11 @@ int main(int argc, char **argv) {
   int client_addr_len = sizeof(client_addr);
   std::cout << "Waiting for a client to connect...\n";
 
+  UserData user_data;
   while(true){
     int client_fd = accept(server_fd, (struct sockaddr *) &client_addr, (socklen_t *) &client_addr_len);
     std::cout << "Client connected\n";
-    std::thread(talk_to_client, client_fd).detach();
+    std::thread(talk_to_client, client_fd, std::ref(user_data)).detach();
     }
   close(server_fd);
 

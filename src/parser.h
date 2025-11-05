@@ -1,3 +1,6 @@
+#ifndef PARSER_H
+#define PARSER_H
+
 #include <string>
 #include <vector>
 
@@ -7,3 +10,4 @@ std::vector<std::string> parse_array(const char*& buffer, size_t length);
 
 std::vector<std::string> parser(const char*& buffer, size_t length);
 
+#endif

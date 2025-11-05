@@ -1,7 +1,12 @@
+#ifndef USER_DATA_H
+#define USER_DATA_H
+
 #include <string>
 #include <chrono>
 #include <unordered_map>
 #include <deque>
+#include <mutex>
+#include <condition_variable>
 
 
 class UserSetValue{
@@ -23,3 +28,5 @@ public:
   std::unordered_map<std::string, UserSetValue> user_set_values;
   std::unordered_map<std::string, std::deque<std::string>> user_lists;
 };
+
+#endif
