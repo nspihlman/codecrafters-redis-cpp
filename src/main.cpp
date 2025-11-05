@@ -146,7 +146,7 @@ void process_lpop_message(int client_fd, std::vector<std::string>& commands, Use
 
 void process_blpop_message(int client_fd, std::vector<std::string>& commands, UserData& user_data, LockManager& lockmanager) {
   std::string key = commands[1];
-  int timeout = std::stoi(commands[2]);
+  double timeout = std::stod(commands[2]);
 
   auto lock = lockmanager.get_user_lists_lock(key);
   std::unique_lock<std::mutex> guard(*lock);
@@ -162,7 +162,8 @@ void process_blpop_message(int client_fd, std::vector<std::string>& commands, Us
     blocked_client->cv.wait(guard, [&] { return blocked_client->ready;});
   }
   else {
-    blocked_client->cv.wait_for(guard, std::chrono::seconds(timeout), [&] { return blocked_client->ready;});
+    auto timeout_duration = std::chrono::duration<double>(timeout);
+    blocked_client->cv.wait_for(guard, timeout_duration, [&] { return blocked_client->ready;});
   }
   if(user_data.user_lists[key].empty()){
     RespSerializer::sendRespMessage(client_fd, RespSerializer::array({}));
