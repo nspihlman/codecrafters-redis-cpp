@@ -22,11 +22,18 @@ public:
   bool stillValid();
 };
 
+class BlockingClient{
+public:
+  std::condition_variable cv;
+  bool ready = false;
+};
+
 
 class UserData{
 public:
   std::unordered_map<std::string, UserSetValue> user_set_values;
   std::unordered_map<std::string, std::deque<std::string>> user_lists;
+  std::unordered_map<std::string, std::deque<std::shared_ptr<BlockingClient>>> blocked_clients;
 };
 
 #endif

@@ -16,6 +16,7 @@
 #include "user_data.h"
 #include "parser.h"
 #include "respserializer.h"
+#include "lockmanager.h"
 
 
 
@@ -44,14 +45,24 @@ void process_get_message(int client_fd, std::vector<std::string>& commands, std:
   RespSerializer::sendRespMessage(client_fd, RespSerializer::bulkString(user_set_values[commands[1]].value));
 }
 
-void process_rpush_message(int client_fd, std::vector<std::string>& commands, UserData& user_data){
-  if(user_data.user_lists.find(commands[1]) == user_data.user_lists.end()){
-    user_data.user_lists[commands[1]] = {};
+void process_rpush_message(int client_fd, std::vector<std::string>& commands, UserData& user_data, LockManager& lockmanager){
+  std::string key = commands[1];
+  auto lock = lockmanager.get_user_lists_lock(key);
+  std::unique_lock<std::mutex> guard(*lock);
+  if(user_data.user_lists.find(key) == user_data.user_lists.end()){
+    user_data.user_lists[key] = {};
   }
   for(int i = 2; i < commands.size(); ++i){
-    user_data.user_lists[commands[1]].push_back(commands[i]);
+    user_data.user_lists[key].push_back(commands[i]);
   }
-  RespSerializer::sendRespMessage(client_fd, RespSerializer::integer(user_data.user_lists[commands[1]].size()));
+  if(!user_data.blocked_clients[key].empty()){
+    auto blocked_client = user_data.blocked_clients[key].front();
+    user_data.blocked_clients[key].pop_front();
+
+    blocked_client->ready = true;
+    blocked_client->cv.notify_one();
+  }
+  RespSerializer::sendRespMessage(client_fd, RespSerializer::integer(user_data.user_lists[key].size()));
 }
 
 int_fast64_t convert_indexes(int index, size_t list_length){
@@ -65,41 +76,57 @@ int_fast64_t convert_indexes(int index, size_t list_length){
   return positive_index;
 }
 
-void process_lrange_message(int client_fd, std::vector<std::string>& commands, UserData& user_data){
-  if(user_data.user_lists.find(commands[1]) == user_data.user_lists.end()){
+void process_lrange_message(int client_fd, std::vector<std::string>& commands, UserData& user_data, LockManager& lockmanager){
+  std::string key = commands[1];
+  auto lock = lockmanager.get_user_lists_lock(key);
+  std::unique_lock<std::mutex> guard(*lock);
+  if(user_data.user_lists.find(key) == user_data.user_lists.end()){
     RespSerializer::sendRespMessage(client_fd, RespSerializer::array({}));
     return;
   }
 
-  int start = convert_indexes(stoll(commands[2]), user_data.user_lists[commands[1]].size());
-  int stop = convert_indexes(stoll(commands[3]), user_data.user_lists[commands[1]].size());
+  int start = convert_indexes(stoll(commands[2]), user_data.user_lists[key].size());
+  int stop = convert_indexes(stoll(commands[3]), user_data.user_lists[key].size());
   
-  if(user_data.user_lists.find(commands[1]) == user_data.user_lists.end() || start >= user_data.user_lists[commands[1]].size() || start > stop){
+  if(user_data.user_lists.find(key) == user_data.user_lists.end() || start >= user_data.user_lists[key].size() || start > stop){
     RespSerializer::sendRespMessage(client_fd, RespSerializer::array({}));
     return;
   }
-  if(stop >= user_data.user_lists[commands[1]].size()){
-    stop = user_data.user_lists[commands[1]].size() - 1;
+  if(stop >= user_data.user_lists[key].size()){
+    stop = user_data.user_lists[key].size() - 1;
   }
   std::vector<std::string> strs;
   for(start; start <= stop; ++start){
-    strs.push_back(user_data.user_lists[commands[1]][start]);
+    strs.push_back(user_data.user_lists[key][start]);
   }
   RespSerializer::sendRespMessage(client_fd, RespSerializer::array(strs));
 }
 
-void process_lpush_message(int client_fd, std::vector<std::string>& commands, UserData& user_data){
-  if(user_data.user_lists.find(commands[1]) == user_data.user_lists.end()){
-    user_data.user_lists[commands[1]] = {};
+void process_lpush_message(int client_fd, std::vector<std::string>& commands, UserData& user_data, LockManager& lockmanager){
+  std::string key = commands[1];
+  auto lock = lockmanager.get_user_lists_lock(key);
+  std::unique_lock<std::mutex> guard(*lock);
+  if(user_data.user_lists.find(key) == user_data.user_lists.end()){
+    user_data.user_lists[key] = {};
   }
   for(int i = 2; i < commands.size(); ++i){
-    user_data.user_lists[commands[1]].push_front(commands[i]);
+    user_data.user_lists[key].push_front(commands[i]);
   }
-  RespSerializer::sendRespMessage(client_fd, RespSerializer::integer(user_data.user_lists[commands[1]].size()));
+  if(!user_data.blocked_clients[key].empty()){
+    auto blocked_client = user_data.blocked_clients[key].front();
+    user_data.blocked_clients[key].pop_front();
+
+    blocked_client->ready = true;
+    blocked_client->cv.notify_one();
+  }
+  RespSerializer::sendRespMessage(client_fd, RespSerializer::integer(user_data.user_lists[key].size()));
 }
 
-void process_lpop_message(int client_fd, std::vector<std::string>& commands, UserData& user_data){
-  if(user_data.user_lists.find(commands[1]) == user_data.user_lists.end() || user_data.user_lists[commands[1]].size() == 0){
+void process_lpop_message(int client_fd, std::vector<std::string>& commands, UserData& user_data, LockManager& lockmanager){
+  std::string key = commands[1];
+  auto lock = lockmanager.get_user_lists_lock(key);
+  std::unique_lock<std::mutex> guard(*lock);
+  if(user_data.user_lists.find(key) == user_data.user_lists.end() || user_data.user_lists[key].size() == 0){
     RespSerializer::sendRespMessage(client_fd, RespSerializer::bulkString(""));
     return;
   }
@@ -107,21 +134,46 @@ void process_lpop_message(int client_fd, std::vector<std::string>& commands, Use
     std::vector<std::string> strs;
     int ele_to_pop = stoll(commands[2]);
     for(int i = 0; i <  ele_to_pop; ++i){
-      strs.push_back(user_data.user_lists[commands[1]].front());
-      user_data.user_lists[commands[1]].pop_front();
+      strs.push_back(user_data.user_lists[key].front());
+      user_data.user_lists[key].pop_front();
     }
     RespSerializer::sendRespMessage(client_fd, RespSerializer::array(strs));
     return;
   }
-  RespSerializer::sendRespMessage(client_fd, RespSerializer::bulkString(user_data.user_lists[commands[1]].front()));
-  user_data.user_lists[commands[1]].pop_front();
+  RespSerializer::sendRespMessage(client_fd, RespSerializer::bulkString(user_data.user_lists[key].front()));
+  user_data.user_lists[key].pop_front();
 }
 
-void process_blpop_message(int client_fd, std::vector<std::string>& commands, UserData& user_data){
-  return;
+void process_blpop_message(int client_fd, std::vector<std::string>& commands, UserData& user_data, LockManager& lockmanager) {
+  std::string key = commands[1];
+  int timeout = std::stoi(commands[2]);
+
+  auto lock = lockmanager.get_user_lists_lock(key);
+  std::unique_lock<std::mutex> guard(*lock);
+
+  if(!user_data.user_lists[key].empty()){
+    RespSerializer::sendRespMessage(client_fd, RespSerializer::array({key, user_data.user_lists[key].front()}));
+    user_data.user_lists[key].pop_front();
+    return;
+  }
+  auto blocked_client = std::make_shared<BlockingClient>();
+  user_data.blocked_clients[key].push_back(blocked_client);
+  if(timeout == 0){
+    blocked_client->cv.wait(guard, [&] { return blocked_client->ready;});
+  }
+  else {
+    blocked_client->cv.wait_for(guard, std::chrono::seconds(timeout), [&] { return blocked_client->ready;});
+  }
+  if(user_data.user_lists[key].empty()){
+    RespSerializer::sendRespMessage(client_fd, RespSerializer::array({}));
+    return;
+  }
+
+  RespSerializer::sendRespMessage(client_fd, RespSerializer::array({key, user_data.user_lists[key].front()}));
+  user_data.user_lists[key].pop_front();
 }
 
-void process_client_message(int client_fd, const char* buffer, size_t length, UserData& user_data){
+void process_client_message(int client_fd, const char* buffer, size_t length, UserData& user_data, LockManager& lockmanager){
     std::vector<std::string> commands = parser(buffer, length);
     if(commands[0] == "PING"){
       RespSerializer::sendRespMessage(client_fd, "+PONG\r\n");
@@ -136,26 +188,26 @@ void process_client_message(int client_fd, const char* buffer, size_t length, Us
       process_get_message(client_fd, commands, user_data.user_set_values);
     }
     else if (commands[0] == "RPUSH"){
-      process_rpush_message(client_fd, commands, user_data);
+      process_rpush_message(client_fd, commands, user_data, lockmanager);
     }
     else if (commands[0] == "LRANGE"){
-      process_lrange_message(client_fd, commands, user_data);
+      process_lrange_message(client_fd, commands, user_data, lockmanager);
     }
     else if (commands[0] == "LPUSH"){
-      process_lpush_message(client_fd, commands, user_data);
+      process_lpush_message(client_fd, commands, user_data, lockmanager);
     }
     else if(commands[0] == "LLEN") {
       RespSerializer::sendRespMessage(client_fd, RespSerializer::integer(user_data.user_lists[commands[1]].size()));
     }
     else if(commands[0] == "LPOP"){
-      process_lpop_message(client_fd, commands, user_data);
+      process_lpop_message(client_fd, commands, user_data, lockmanager);
     }
     else if(commands[0] == "BLPOP"){
-      process_blpop_message(client_fd, commands, user_data);
+      process_blpop_message(client_fd, commands, user_data, lockmanager);
     }
 }
 
-void talk_to_client(int client_fd, UserData& user_data){
+void talk_to_client(int client_fd, UserData& user_data, LockManager& lockmanager){
   char buffer[1024];
   while(true){
     ssize_t bytes_read = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
@@ -163,7 +215,7 @@ void talk_to_client(int client_fd, UserData& user_data){
       close(client_fd);
       break;
     }
-    process_client_message(client_fd, buffer, bytes_read, user_data);
+    process_client_message(client_fd, buffer, bytes_read, user_data, lockmanager);
   }
 }
 
@@ -207,10 +259,11 @@ int main(int argc, char **argv) {
   std::cout << "Waiting for a client to connect...\n";
 
   UserData user_data;
+  LockManager lockmanager;
   while(true){
     int client_fd = accept(server_fd, (struct sockaddr *) &client_addr, (socklen_t *) &client_addr_len);
     std::cout << "Client connected\n";
-    std::thread(talk_to_client, client_fd, std::ref(user_data)).detach();
+    std::thread(talk_to_client, client_fd, std::ref(user_data), std::ref(lockmanager)).detach();
     }
   close(server_fd);
 
