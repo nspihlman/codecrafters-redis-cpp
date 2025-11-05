@@ -9,7 +9,6 @@ std::string RespSerializer::bulkString(const std::string& str){
 }
 
 std::string RespSerializer::array(const std::vector<std::string>& strs){
-    if(strs.size() == 0) { return "*-1\r\n";};
     std::string value = "*" + std::to_string(strs.size()) + "\r\n";
     for(int i = 0; i < strs.size(); ++i){
         value += bulkString(strs[i]);

@@ -166,7 +166,7 @@ void process_blpop_message(int client_fd, std::vector<std::string>& commands, Us
     blocked_client->cv.wait_for(guard, timeout_duration, [&] { return blocked_client->ready;});
   }
   if(user_data.user_lists[key].empty()){
-    RespSerializer::sendRespMessage(client_fd, RespSerializer::array({}));
+    RespSerializer::sendRespMessage(client_fd, "*-1\r\n");
     return;
   }
 
