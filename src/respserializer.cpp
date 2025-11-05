@@ -4,13 +4,12 @@
 #include "respserializer.h"
 
 std::string RespSerializer::bulkString(const std::string& str){
-    if(str.size() == 0){
-        return "$-1\r\n";
-    }
+    if(str.size() == 0){ return "$-1\r\n";}
     return "$" + std::to_string(str.size()) + "\r\n" + str + "\r\n";
 }
 
 std::string RespSerializer::array(const std::vector<std::string>& strs){
+    if(strs.size() == 0) { return "*-1\r\n";};
     std::string value = "*" + std::to_string(strs.size()) + "\r\n";
     for(int i = 0; i < strs.size(); ++i){
         value += bulkString(strs[i]);
