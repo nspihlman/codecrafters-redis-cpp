@@ -42,7 +42,7 @@ void CommandHandler::handle_ping(int client_fd, std::vector<std::string>& comman
 }
 
 void CommandHandler::handle_echo(int client_fd, std::vector<std::string>& commands) {
-    RespSerializer::sendRespMessage(client_fd, "+" + commands[1] + "\r\n");
+    RespSerializer::sendRespMessage(client_fd, RespSerializer::bulkString(commands[1]));
 }
 
 void CommandHandler::handle_set(int client_fd, std::vector<std::string>& commands) {
