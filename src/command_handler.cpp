@@ -20,7 +20,8 @@ void CommandHandler::initialize_handlers() {
         {"LLEN", [this](int fd, std::vector<std::string>& cmds) { handle_llen(fd, cmds); }},
         {"LPOP", [this](int fd, std::vector<std::string>& cmds) { handle_lpop(fd, cmds); }},
         {"BLPOP", [this](int fd, std::vector<std::string>& cmds) { handle_blpop(fd, cmds); }},
-        {"TYPE", [this](int fd, std::vector<std::string>& cmds) {handle_type(fd, cmds);}}
+        {"TYPE", [this](int fd, std::vector<std::string>& cmds) {handle_type(fd, cmds);}},
+        {"XADD", [this](int fd, std::vector<std::string>& cmds) {handle_xadd(fd, cmds);}}
     };
 }
 
@@ -205,9 +206,33 @@ void CommandHandler::handle_blpop(int client_fd, std::vector<std::string>& comma
 
 void CommandHandler::handle_type(int client_fd, std::vector<std::string>& commands) {
     std::string key = commands[1];
-    if(user_data_.user_set_values.find(key) == user_data_.user_set_values.end()){
-        RespSerializer::sendRespMessage(client_fd, RespSerializer::simpleString("none"));
+    if(user_data_.user_set_values.find(key) != user_data_.user_set_values.end()){
+        RespSerializer::sendRespMessage(client_fd, RespSerializer::simpleString("string"));
         return;
     }
-    RespSerializer::sendRespMessage(client_fd, RespSerializer::simpleString("string"));
+    if(user_data_.user_lists.find(key) != user_data_.user_lists.end()){
+        RespSerializer::sendRespMessage(client_fd, RespSerializer::simpleString("list"));
+        return;
+    }
+    if(user_data_.user_streams.find(key) != user_data_.user_streams.end()){
+        RespSerializer::sendRespMessage(client_fd, RespSerializer::simpleString("stream"));
+        return;
+    }
+    RespSerializer::sendRespMessage(client_fd, RespSerializer::simpleString("none"));
+}
+
+void CommandHandler::handle_xadd(int client_fd, std::vector<std::string>& commands){
+    std::string key = commands[1];
+    auto lock = lockmanager_.get_user_streams_lock(key);
+    std::unique_lock<std::mutex> guard(*lock);
+
+    if(user_data_.user_streams.find(key) == user_data_.user_streams.end()){
+        user_data_.user_streams[key] = {};
+    }
+    auto& stream = user_data_.user_streams[key];
+    std::string stream_id = commands[2];
+    for(int i = 3; i < commands.size() -1; ++i){
+        stream[stream_id].push_back(std::pair(commands[i], commands[i+1]));
+    }
+    RespSerializer::sendRespMessage(client_fd, RespSerializer::bulkString(stream_id));
 }

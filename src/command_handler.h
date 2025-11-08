@@ -25,9 +25,11 @@ private:
     // Initialize the command handler map
     void initialize_handlers();
     
-    // String commands
     void handle_ping(int client_fd, std::vector<std::string>& commands);
     void handle_echo(int client_fd, std::vector<std::string>& commands);
+    void handle_type(int client_fd, std::vector<std::string>& commands);
+
+     // String commands
     void handle_set(int client_fd, std::vector<std::string>& commands);
     void handle_get(int client_fd, std::vector<std::string>& commands);
     
@@ -40,7 +42,7 @@ private:
     void handle_blpop(int client_fd, std::vector<std::string>& commands);
 
     //Stream commands
-    void handle_type(int client_fd, std::vector<std::string>& commands);
+    void handle_xadd(int client_fd, std::vector<std::string>& commands);
     
     // Helper functions
     int_fast64_t convert_indexes(int index, size_t list_length);

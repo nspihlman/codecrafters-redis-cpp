@@ -34,6 +34,7 @@ public:
   std::unordered_map<std::string, UserSetValue> user_set_values;
   std::unordered_map<std::string, std::deque<std::string>> user_lists;
   std::unordered_map<std::string, std::deque<std::shared_ptr<BlockingClient>>> blocked_clients;
+  std::unordered_map<std::string, std::unordered_map<std::string, std::vector<std::pair<std::string, std::string>>>> user_streams;
 };
 
 #endif
