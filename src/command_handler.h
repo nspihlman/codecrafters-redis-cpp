@@ -38,6 +38,9 @@ private:
     void handle_llen(int client_fd, std::vector<std::string>& commands);
     void handle_lpop(int client_fd, std::vector<std::string>& commands);
     void handle_blpop(int client_fd, std::vector<std::string>& commands);
+
+    //Stream commands
+    void handle_type(int client_fd, std::vector<std::string>& commands);
     
     // Helper functions
     int_fast64_t convert_indexes(int index, size_t list_length);

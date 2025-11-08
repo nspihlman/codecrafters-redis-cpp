@@ -3,6 +3,10 @@
 #include <sys/socket.h>
 #include "respserializer.h"
 
+std::string RespSerializer::simpleString(const std::string& str){
+    return "+" + str + "\r\n";
+}
+
 std::string RespSerializer::bulkString(const std::string& str){
     if(str.size() == 0){ return "$-1\r\n";}
     return "$" + std::to_string(str.size()) + "\r\n" + str + "\r\n";

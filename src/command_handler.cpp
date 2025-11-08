@@ -19,7 +19,8 @@ void CommandHandler::initialize_handlers() {
         {"LRANGE", [this](int fd, std::vector<std::string>& cmds) { handle_lrange(fd, cmds); }},
         {"LLEN", [this](int fd, std::vector<std::string>& cmds) { handle_llen(fd, cmds); }},
         {"LPOP", [this](int fd, std::vector<std::string>& cmds) { handle_lpop(fd, cmds); }},
-        {"BLPOP", [this](int fd, std::vector<std::string>& cmds) { handle_blpop(fd, cmds); }}
+        {"BLPOP", [this](int fd, std::vector<std::string>& cmds) { handle_blpop(fd, cmds); }},
+        {"TYPE", [this](int fd, std::vector<std::string>& cmds) {handle_type(fd, cmds);}}
     };
 }
 
@@ -200,4 +201,13 @@ void CommandHandler::handle_blpop(int client_fd, std::vector<std::string>& comma
 
     RespSerializer::sendRespMessage(client_fd, RespSerializer::array({key, user_data_.user_lists[key].front()}));
     user_data_.user_lists[key].pop_front();
+}
+
+void CommandHandler::handle_type(int client_fd, std::vector<std::string>& commands) {
+    std::string key = commands[1];
+    if(user_data_.user_set_values.find(key) == user_data_.user_set_values.end()){
+        RespSerializer::sendRespMessage(client_fd, RespSerializer::simpleString("none"));
+        return;
+    }
+    RespSerializer::sendRespMessage(client_fd, RespSerializer::simpleString("string"));
 }
