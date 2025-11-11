@@ -28,13 +28,25 @@ public:
   bool ready = false;
 };
 
+class UserStreamValue{
+public:
+  long ms_time;
+  int seq_num;
+  std::vector<std::pair<std::string, std::string>> pairs;
+
+  UserStreamValue(std::string stream_id);
+  std::string construct_id();
+
+};
+
 
 class UserData{
 public:
   std::unordered_map<std::string, UserSetValue> user_set_values;
   std::unordered_map<std::string, std::deque<std::string>> user_lists;
   std::unordered_map<std::string, std::deque<std::shared_ptr<BlockingClient>>> blocked_clients;
-  std::unordered_map<std::string, std::unordered_map<std::string, std::vector<std::pair<std::string, std::string>>>> user_streams;
+  //std::unordered_map<std::string, std::unordered_map<std::string, std::vector<std::pair<std::string, std::string>>>> user_streams;
+  std::unordered_map<std::string, std::deque<UserStreamValue>> user_streams;
 };
 
 #endif

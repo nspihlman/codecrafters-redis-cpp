@@ -11,3 +11,10 @@ bool UserSetValue::stillValid(){
     }
     return (std::chrono::steady_clock::now() - inserted) < std::chrono::milliseconds(msExpiry);
 }
+
+UserStreamValue::UserStreamValue(std::string stream_id){
+    int splt = stream_id.find("-");
+    ms_time = stol(stream_id.substr(0, splt));
+    seq_num = stol(stream_id.substr(splt+1));
+    pairs = {};
+}

@@ -225,14 +225,36 @@ void CommandHandler::handle_xadd(int client_fd, std::vector<std::string>& comman
     std::string key = commands[1];
     auto lock = lockmanager_.get_user_streams_lock(key);
     std::unique_lock<std::mutex> guard(*lock);
-
     if(user_data_.user_streams.find(key) == user_data_.user_streams.end()){
         user_data_.user_streams[key] = {};
     }
+
     auto& stream = user_data_.user_streams[key];
     std::string stream_id = commands[2];
-    for(int i = 3; i < commands.size() -1; ++i){
-        stream[stream_id].push_back(std::pair(commands[i], commands[i+1]));
+    if(stream_id == "0-0"){
+        RespSerializer::sendRespMessage(client_fd, RespSerializer::simpleError("The ID specified in XADD must be greater than 0-0"));
+        return;
     }
+
+    UserStreamValue new_user_values = UserStreamValue(stream_id);
+    if(!stream.empty() && !valid_sequence_number(new_user_values, stream.back())){
+        RespSerializer::sendRespMessage(client_fd, RespSerializer::simpleError("The ID specified in XADD is equal or smaller than the target stream top item"));
+        return;
+    }
+    for(int i = 3; i < commands.size() -1; ++i){
+        new_user_values.pairs.push_back(std::pair(commands[i], commands[i+1]));
+    }
+
+    stream.push_back(new_user_values);
     RespSerializer::sendRespMessage(client_fd, RespSerializer::bulkString(stream_id));
+}
+
+bool CommandHandler::valid_sequence_number(UserStreamValue new_value, UserStreamValue prev_value){
+    if(new_value.ms_time < prev_value.ms_time){
+        return false;
+    }
+    if(new_value.ms_time == prev_value.ms_time && new_value.seq_num <= prev_value.seq_num){
+        return false;
+    }
+    return true;
 }

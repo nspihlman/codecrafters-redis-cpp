@@ -12,6 +12,11 @@ std::string RespSerializer::bulkString(const std::string& str){
     return "$" + std::to_string(str.size()) + "\r\n" + str + "\r\n";
 }
 
+std::string RespSerializer::simpleError(const std::string& str){
+    std::string err_msg = "-ERR " + str + "\r\n";
+    return err_msg;
+}
+
 std::string RespSerializer::array(const std::vector<std::string>& strs){
     std::string value = "*" + std::to_string(strs.size()) + "\r\n";
     for(int i = 0; i < strs.size(); ++i){

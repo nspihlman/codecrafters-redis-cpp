@@ -46,6 +46,7 @@ private:
     
     // Helper functions
     int_fast64_t convert_indexes(int index, size_t list_length);
+    bool valid_sequence_number(UserStreamValue new_value, UserStreamValue prev_value);
 };
 
 #endif
